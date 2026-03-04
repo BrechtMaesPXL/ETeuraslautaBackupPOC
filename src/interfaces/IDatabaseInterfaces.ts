@@ -35,3 +35,19 @@ export interface IBackupFile {
   metadata: IBackupMetadata | null;
   location?: BackupDestination;
 }
+
+export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
+
+export interface ISyncState {
+  apiEnabled: boolean;
+  lastSyncedAt: string | null;
+  syncStatus: SyncStatus;
+}
+
+export interface ISyncLogEntry {
+  id: number;
+  timestamp: string;
+  success: boolean;
+  itemCount: number;
+  errorMessage: string | null;
+}

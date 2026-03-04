@@ -15,6 +15,7 @@ import {
   IBackupFile,
   IBackupData,
   BackupDestination,
+  ISyncState,
 } from '../../interfaces/IDatabaseInterfaces';
 
 export interface DatabaseViewProps {
@@ -44,6 +45,9 @@ export interface DatabaseViewProps {
   onHidePreview: () => void;
   onRestoreBackup: (backup: IBackupFile) => void;
   onDeleteBackup: (backup: IBackupFile) => void;
+  syncState: ISyncState;
+  onToggleApi: (enabled: boolean) => void;
+  onSyncNow: () => void;
 }
 
 // ─── Item Form Modal ─────────────────────────────────────────────────────────
@@ -267,6 +271,9 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({
   onHidePreview,
   onRestoreBackup,
   onDeleteBackup,
+  syncState,
+  onToggleApi,
+  onSyncNow,
 }) => {
   const formatDate = (dateStr: string) => {
     try {
@@ -401,9 +408,8 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({
     );
   }
 
-  return (
-    <View style={styles.container}>
-
+  const listHeader = (
+    <View>
       {/* Stats & SD Card Status Card */}
       <View style={styles.statsCard}>
         {/* Row 1: DB stats */}
@@ -453,6 +459,61 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Divider */}
+        <View style={styles.cardDivider} />
+
+        {/* Row 3: API Sync status */}
+        <View style={styles.syncRow}>
+          <View style={styles.syncLeft}>
+            <View style={[
+              styles.syncStatusDot,
+              {backgroundColor:
+                syncState.syncStatus === 'synced' ? '#27ae60' :
+                syncState.syncStatus === 'syncing' ? '#f39c12' :
+                syncState.syncStatus === 'error' ? '#e74c3c' :
+                '#95a5a6'},
+            ]} />
+            <View style={styles.syncInfo}>
+              <Text style={styles.syncLabel}>API Sync</Text>
+              <Text style={styles.syncStatusText}>
+                {syncState.syncStatus === 'synced' ? 'Synced' :
+                 syncState.syncStatus === 'syncing' ? 'Syncing...' :
+                 syncState.syncStatus === 'error' ? 'Sync Error' :
+                 'Idle'}
+              </Text>
+              <Text style={styles.syncLastTime}>
+                {syncState.lastSyncedAt
+                  ? `Last: ${formatDate(syncState.lastSyncedAt)}`
+                  : 'Never synced'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.syncActions}>
+            <TouchableOpacity
+              style={[
+                styles.syncToggle,
+                syncState.apiEnabled ? styles.syncToggleOn : styles.syncToggleOff,
+              ]}
+              onPress={() => onToggleApi(!syncState.apiEnabled)}>
+              <Text style={[
+                styles.syncToggleText,
+                syncState.apiEnabled ? styles.syncToggleTextOn : styles.syncToggleTextOff,
+              ]}>
+                {syncState.apiEnabled ? 'ON' : 'OFF'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.syncNowButton,
+                (!syncState.apiEnabled || syncState.syncStatus === 'syncing') && styles.disabledButton,
+              ]}
+              onPress={onSyncNow}
+              disabled={!syncState.apiEnabled || syncState.syncStatus === 'syncing'}>
+              <Text style={styles.syncNowButtonText}>Sync</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       {/* Action Bar */}
@@ -471,91 +532,96 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({
           </Text>
         </TouchableOpacity>
       </View>
+    </View>
+  );
 
-      {/* Items List */}
-      {items.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>{'{ }'}</Text>
-          <Text style={styles.emptyTitle}>No Items Yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Tap "Add Item" to create your first database entry
+  const listFooter = (
+    <View style={styles.backupSection}>
+      <Text style={styles.backupSectionTitle}>Backup & Restore</Text>
+
+      <View style={styles.backupButtons}>
+        <TouchableOpacity
+          style={[
+            styles.backupButton,
+            styles.exportButton,
+            (sdCardAvailable !== true) && styles.disabledButton,
+          ]}
+          onPress={onExportBackup}
+          disabled={isBackingUp || sdCardAvailable !== true}>
+          <Text style={styles.exportButtonText}>
+            {isBackingUp ? 'Exporting...' : 'Export to SD'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.backupButton, styles.viewBackupsButton]}
+          onPress={showBackups ? onHideBackups : onShowBackups}>
+          <Text style={styles.viewBackupsButtonText}>
+            {showBackups ? 'Hide Backups' : 'View Backups'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {sdCardAvailable !== true && (
+        <View style={styles.sdWarningBanner}>
+          <Text style={styles.sdWarningText}>
+            {sdCardAvailable === null
+              ? 'Checking SD card availability...'
+              : 'SD card is not available. Backup export is disabled.'}
           </Text>
         </View>
-      ) : (
-        <FlatList
-          data={items}
-          renderItem={renderItem}
-          keyExtractor={item => item.id.toString()}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
       )}
 
-      {/* Backup & Restore Section */}
-      <View style={styles.backupSection}>
-        <Text style={styles.backupSectionTitle}>Backup & Restore</Text>
-
-        <View style={styles.backupButtons}>
-          <TouchableOpacity
-            style={[
-              styles.backupButton,
-              styles.exportButton,
-              (sdCardAvailable !== true) && styles.disabledButton,
-            ]}
-            onPress={onExportBackup}
-            disabled={isBackingUp || sdCardAvailable !== true}>
-            <Text style={styles.exportButtonText}>
-              {isBackingUp ? 'Exporting...' : 'Export to SD'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.backupButton, styles.viewBackupsButton]}
-            onPress={showBackups ? onHideBackups : onShowBackups}>
-            <Text style={styles.viewBackupsButtonText}>
-              {showBackups ? 'Hide Backups' : 'View Backups'}
-            </Text>
-          </TouchableOpacity>
+      {isRestoring && (
+        <View style={styles.restoringBanner}>
+          <ActivityIndicator size="small" color="#ffffff" />
+          <Text style={styles.restoringText}>Restoring backup...</Text>
         </View>
+      )}
 
-        {sdCardAvailable !== true && (
-          <View style={styles.sdWarningBanner}>
-            <Text style={styles.sdWarningText}>
-              {sdCardAvailable === null
-                ? 'Checking SD card availability...'
-                : 'SD card is not available. Backup export is disabled.'}
+      {showBackups && (
+        <View style={styles.backupList}>
+          {backups.length === 0 ? (
+            <View style={styles.noBackupsBox}>
+              <Text style={styles.noBackupsText}>
+                No backups found on SD card
+              </Text>
+              <Text style={styles.noBackupsSubText}>
+                {sdCardPath || 'SD card path unavailable'}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={backups}
+              renderItem={renderBackupItem}
+              keyExtractor={item => item.filename}
+              scrollEnabled={false}
+            />
+          )}
+        </View>
+      )}
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={items}
+        renderItem={renderItem}
+        keyExtractor={item => item.id.toString()}
+        ListHeaderComponent={listHeader}
+        ListFooterComponent={listFooter}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>{'{ }'}</Text>
+            <Text style={styles.emptyTitle}>No Items Yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Tap "Add Item" to create your first database entry
             </Text>
           </View>
-        )}
-
-        {isRestoring && (
-          <View style={styles.restoringBanner}>
-            <ActivityIndicator size="small" color="#ffffff" />
-            <Text style={styles.restoringText}>Restoring backup...</Text>
-          </View>
-        )}
-
-        {showBackups && (
-          <View style={styles.backupList}>
-            {backups.length === 0 ? (
-              <View style={styles.noBackupsBox}>
-                <Text style={styles.noBackupsText}>
-                  No backups found on SD card
-                </Text>
-                <Text style={styles.noBackupsSubText}>
-                  {sdCardPath || 'SD card path unavailable'}
-                </Text>
-              </View>
-            ) : (
-              <FlatList
-                data={backups}
-                renderItem={renderBackupItem}
-                keyExtractor={item => item.filename}
-                scrollEnabled={false}
-              />
-            )}
-          </View>
-        )}
-      </View>
+        }
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      />
 
       {/* Add Item Modal */}
       <ItemFormModal
@@ -739,14 +805,13 @@ const styles = StyleSheet.create({
 
   // Items list
   listContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
     paddingBottom: 8,
   },
   itemCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 16,
+    marginHorizontal: 20,
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
@@ -805,7 +870,7 @@ const styles = StyleSheet.create({
     color: '#95a5a6',
   },
   emptyContainer: {
-    flex: 1,
+    paddingVertical: 60,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
@@ -1261,5 +1326,85 @@ const styles = StyleSheet.create({
   previewItemMetaText: {
     fontSize: 11,
     color: '#95a5a6',
+  },
+
+  // API Sync section
+  syncRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  syncLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+  },
+  syncStatusDot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  syncInfo: {
+    flex: 1,
+  },
+  syncLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2c3e50',
+    marginBottom: 2,
+  },
+  syncStatusText: {
+    fontSize: 12,
+    color: '#5d6d7e',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  syncLastTime: {
+    fontSize: 11,
+    color: '#95a5a6',
+  },
+  syncActions: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 6,
+    marginLeft: 12,
+  },
+  syncToggle: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    minWidth: 56,
+    alignItems: 'center',
+  },
+  syncToggleOn: {
+    backgroundColor: '#27ae60',
+  },
+  syncToggleOff: {
+    backgroundColor: '#bdc3c7',
+  },
+  syncToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  syncToggleTextOn: {
+    color: '#ffffff',
+  },
+  syncToggleTextOff: {
+    color: '#ffffff',
+  },
+  syncNowButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: '#3498db',
+    alignItems: 'center',
+  },
+  syncNowButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

@@ -30,6 +30,9 @@ export const DatabaseContainer: React.FC = () => {
     handleHidePreview,
     handleRestoreBackup,
     handleDeleteBackup,
+    syncState,
+    handleToggleApi,
+    handleSyncNow,
   } = useDatabaseController();
 
   return (
@@ -60,6 +63,9 @@ export const DatabaseContainer: React.FC = () => {
       onHidePreview={handleHidePreview}
       onRestoreBackup={handleRestoreBackup}
       onDeleteBackup={handleDeleteBackup}
+      syncState={syncState}
+      onToggleApi={handleToggleApi}
+      onSyncNow={handleSyncNow}
     />
   );
 };

@@ -24,7 +24,7 @@ export { InternalStorageContainer } from './containers/InternalStorageContainer'
 export { AppRouter } from './components/AppRouter';
 
 // Types
-export type { StorageInfo, HomeData } from './controllers/HomeController';
+export type { HomeData } from './controllers/HomeController';
 export type { ScreenName, NavigationParams, NavigationState } from './controllers/NavigationController';
 export type { FileItem, SDStorageData } from './controllers/SDStorageController';
 export type { AppItem, TabStorageData } from './controllers/TabStorageController';

@@ -1,6 +1,6 @@
 import {open} from '@op-engineering/op-sqlite';
 import type {Transaction} from '@op-engineering/op-sqlite';
-import {IDatabaseItem, IDatabaseItemInput} from '../../interfaces/IDatabaseInterfaces';
+import {IDatabaseItem, IDatabaseItemInput, ISyncLogEntry} from '../../interfaces/IDatabaseInterfaces';
 
 type OPSQLiteDB = ReturnType<typeof open>;
 
@@ -53,6 +53,28 @@ export class DatabaseService {
     await this.db.execute(
       'INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 1);',
     );
+
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS sync_state (
+        id              INTEGER PRIMARY KEY CHECK (id = 1),
+        api_enabled     INTEGER NOT NULL DEFAULT 0,
+        last_synced_at  TEXT
+      );
+    `);
+
+    await this.db.execute(
+      'INSERT OR IGNORE INTO sync_state (id, api_enabled, last_synced_at) VALUES (1, 0, NULL);',
+    );
+
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS sync_log (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp     TEXT    NOT NULL,
+        success       INTEGER NOT NULL,
+        item_count    INTEGER NOT NULL DEFAULT 0,
+        error_message TEXT
+      );
+    `);
   }
 
   private async ensureInitialized(): Promise<OPSQLiteDB> {
@@ -180,6 +202,57 @@ export class DatabaseService {
         );
       }
     });
+  }
+
+  public async getSyncState(): Promise<{apiEnabled: boolean; lastSyncedAt: string | null}> {
+    const db = await this.ensureInitialized();
+    const result = await db.execute(
+      'SELECT api_enabled, last_synced_at FROM sync_state WHERE id = 1;',
+    );
+    const rows = result.rows ?? [];
+    if (rows.length === 0) {
+      return {apiEnabled: false, lastSyncedAt: null};
+    }
+    return {
+      apiEnabled: (rows[0].api_enabled as number) === 1,
+      lastSyncedAt: (rows[0].last_synced_at as string) ?? null,
+    };
+  }
+
+  public async setSyncState(apiEnabled: boolean, lastSyncedAt: string | null): Promise<void> {
+    const db = await this.ensureInitialized();
+    await db.execute(
+      'UPDATE sync_state SET api_enabled = ?, last_synced_at = ? WHERE id = 1;',
+      [apiEnabled ? 1 : 0, lastSyncedAt],
+    );
+  }
+
+  public async addSyncLog(
+    success: boolean,
+    itemCount: number,
+    errorMessage: string | null,
+  ): Promise<void> {
+    const db = await this.ensureInitialized();
+    const now = new Date().toISOString();
+    await db.execute(
+      'INSERT INTO sync_log (timestamp, success, item_count, error_message) VALUES (?, ?, ?, ?);',
+      [now, success ? 1 : 0, itemCount, errorMessage],
+    );
+  }
+
+  public async getSyncLog(limit: number = 20): Promise<ISyncLogEntry[]> {
+    const db = await this.ensureInitialized();
+    const result = await db.execute(
+      'SELECT id, timestamp, success, item_count, error_message FROM sync_log ORDER BY id DESC LIMIT ?;',
+      [limit],
+    );
+    return (result.rows ?? []).map(row => ({
+      id: row.id as number,
+      timestamp: row.timestamp as string,
+      success: (row.success as number) === 1,
+      itemCount: row.item_count as number,
+      errorMessage: (row.error_message as string) ?? null,
+    }));
   }
 
   public close(): void {

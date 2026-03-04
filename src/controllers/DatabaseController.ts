@@ -8,12 +8,16 @@ import {
   IBackupFile,
   IBackupData,
   BackupDestination,
+  ISyncState,
+  ISyncLogEntry,
 } from '../interfaces/IDatabaseInterfaces';
+import {SyncService} from './services/SyncService';
 
 export class DatabaseController {
   private static instance: DatabaseController;
   private databaseModel = DatabaseModel.getInstance();
   private backupService = BackupService.getInstance();
+  private syncService = SyncService.getInstance();
 
   public static getInstance(): DatabaseController {
     if (!DatabaseController.instance) {
@@ -76,6 +80,31 @@ export class DatabaseController {
   public getInternalBackupDirectory(): string {
     return this.backupService.getInternalBackupDirectory();
   }
+
+  public async loadSyncState(): Promise<ISyncState> {
+    return await this.syncService.loadPersistedState();
+  }
+
+  public async toggleApiEnabled(enabled: boolean): Promise<void> {
+    await this.syncService.setApiEnabled(enabled);
+  }
+
+  public async syncNow(): Promise<void> {
+    await this.syncService.syncNow();
+  }
+
+  public getSyncService(): SyncService {
+    return this.syncService;
+  }
+
+  public async getSyncLog(limit?: number): Promise<ISyncLogEntry[]> {
+    return await this.syncService.getSyncLog(limit);
+  }
+
+  public async getRecentItems(limit: number = 5): Promise<IDatabaseItem[]> {
+    const items = await this.databaseModel.loadItems();
+    return items.slice(0, limit);
+  }
 }
 
 export const useDatabaseController = () => {
@@ -92,11 +121,37 @@ export const useDatabaseController = () => {
   const [sdCardPath, setSdCardPath] = useState<string>('');
   const [previewBackup, setPreviewBackup] = useState<IBackupData | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [syncState, setSyncState] = useState<ISyncState>({
+    apiEnabled: false,
+    lastSyncedAt: null,
+    syncStatus: 'idle',
+  });
   const controller = DatabaseController.getInstance();
 
   useEffect(() => {
     loadData();
     checkSDCard();
+    loadSyncState();
+  }, []);
+
+  const loadSyncState = useCallback(async () => {
+    try {
+      const state = await controller.loadSyncState();
+      setSyncState(state);
+      const syncService = controller.getSyncService();
+      syncService.startPolling((newState) => {
+        setSyncState(newState);
+      });
+    } catch (error) {
+      console.error('Error loading sync state:', error);
+    }
+  }, []);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      controller.getSyncService().stopPolling();
+    };
   }, []);
 
   const checkSDCard = useCallback(async () => {
@@ -372,6 +427,24 @@ export const useDatabaseController = () => {
     );
   }, []);
 
+  const handleToggleApi = useCallback(async (enabled: boolean) => {
+    try {
+      await controller.toggleApiEnabled(enabled);
+      setSyncState(controller.getSyncService().getSyncState());
+    } catch (error) {
+      console.error('Error toggling API:', error);
+      Alert.alert('Error', 'Failed to toggle API sync');
+    }
+  }, []);
+
+  const handleSyncNow = useCallback(async () => {
+    try {
+      await controller.syncNow();
+    } catch (error) {
+      console.error('Error syncing:', error);
+    }
+  }, []);
+
   return {
     items,
     backups,
@@ -400,5 +473,8 @@ export const useDatabaseController = () => {
     handleHidePreview,
     handleRestoreBackup,
     handleDeleteBackup,
+    syncState,
+    handleToggleApi,
+    handleSyncNow,
   };
 };

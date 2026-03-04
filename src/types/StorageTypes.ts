@@ -18,5 +18,5 @@ export type NavigationParams = {
   [key: string]: any;
 }
 
-export type HomeTab = 'storage' | 'database';
+export type HomeTab = 'sdcard' | 'sync' | 'database';
 export type ItemCategoryType = 'files' | 'apps' | 'system';

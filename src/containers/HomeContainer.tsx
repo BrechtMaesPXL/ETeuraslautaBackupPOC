@@ -6,32 +6,29 @@ import {DatabaseContainer} from './DatabaseContainer';
 export const HomeContainer: React.FC = () => {
   const {
     homeData,
-    selectedStorageId,
     isRefreshing,
     activeTab,
-    handleStoragePress,
+    syncState,
+    syncLog,
+    recentItems,
+    sdCardOverview,
     handleRefresh,
-    handleCleanStorage,
-    handleBackupStorage,
     handleTabChange,
   } = useHomeController();
-
-  if (!homeData) {
-    return null;
-  }
 
   return (
     <HomeView
       title={homeData.title}
       subtitle={homeData.subtitle}
-      storageData={homeData.storageData}
-      selectedStorageId={selectedStorageId}
-      isRefreshing={isRefreshing}
       activeTab={activeTab}
-      onStoragePress={handleStoragePress}
+      sdCardAvailable={sdCardOverview.available}
+      sdCardPath={sdCardOverview.path}
+      sdCardBackups={sdCardOverview.backups}
+      syncState={syncState}
+      syncLog={syncLog}
+      recentItems={recentItems}
+      isRefreshing={isRefreshing}
       onRefresh={handleRefresh}
-      onCleanStorage={handleCleanStorage}
-      onBackupStorage={handleBackupStorage}
       onTabChange={handleTabChange}
       databaseContent={<DatabaseContainer />}
     />

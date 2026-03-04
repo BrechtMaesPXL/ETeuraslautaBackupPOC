@@ -5,261 +5,336 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
 } from 'react-native';
-
-const { width } = Dimensions.get('window');
-
-export interface StorageInfo {
-  id: string;
-  name: string;
-  type: 'sd' | 'tab' | 'internal';
-  totalSpace: number; // in GB
-  usedSpace: number; // in GB
-  status: 'available' | 'unavailable' | 'full';
-  icon: string;
-  lastAccessed?: string;
-  permissions?: 'read' | 'read-write' | 'restricted';
-}
+import {
+  IDatabaseItem,
+  ISyncState,
+  ISyncLogEntry,
+  IBackupFile,
+} from '../../interfaces/IDatabaseInterfaces';
 
 export interface HomeViewProps {
   title: string;
   subtitle: string;
-  storageData: StorageInfo[];
-  selectedStorageId: string | null;
+  activeTab: 'sdcard' | 'sync' | 'database';
+  sdCardAvailable: boolean;
+  sdCardPath: string;
+  sdCardBackups: IBackupFile[];
+  syncState: ISyncState;
+  syncLog: ISyncLogEntry[];
+  recentItems: IDatabaseItem[];
   isRefreshing: boolean;
-  activeTab: 'storage' | 'database';
-  onStoragePress: (storageId: string) => void;
   onRefresh: () => void;
-  onCleanStorage: (storageId: string) => void;
-  onBackupStorage: (storageId: string) => void;
-  onTabChange: (tab: 'storage' | 'database') => void;
+  onTabChange: (tab: 'sdcard' | 'sync' | 'database') => void;
   databaseContent: React.ReactNode;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
   title,
   subtitle,
-  storageData,
-  selectedStorageId,
-  isRefreshing,
   activeTab,
-  onStoragePress,
+  sdCardAvailable,
+  sdCardPath,
+  sdCardBackups,
+  syncState,
+  syncLog,
+  recentItems,
+  isRefreshing,
   onRefresh,
-  onCleanStorage,
-  onBackupStorage,
   onTabChange,
   databaseContent,
 }) => {
-  const getStorageColor = (type: string) => {
-    switch (type) {
-      case 'sd':
-        return '#e74c3c'; // Red for SD
-      case 'tab':
-        return '#f39c12'; // Orange for Tab
-      case 'internal':
-        return '#27ae60'; // Green for Internal
-      default:
-        return '#95a5a6';
+  const formatDate = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+    } catch {
+      return dateStr;
     }
   };
 
-  const getProgressPercentage = (used: number, total: number) => {
-    return total > 0 ? (used / total) * 100 : 0;
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) {return `${bytes} B`;}
+    if (bytes < 1024 * 1024) {return `${(bytes / 1024).toFixed(1)} KB`;}
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const formatStorage = (size: number) => {
-    return `${size.toFixed(1)} GB`;
-  };
+  const syncStatusColor =
+    syncState.syncStatus === 'synced' ? '#27ae60' :
+    syncState.syncStatus === 'syncing' ? '#f39c12' :
+    syncState.syncStatus === 'error' ? '#e74c3c' :
+    '#95a5a6';
 
-  const renderStorageCard = (storage: StorageInfo) => {
-    const progressPercentage = getProgressPercentage(storage.usedSpace, storage.totalSpace);
-    const freeSpace = storage.totalSpace - storage.usedSpace;
-    const storageColor = getStorageColor(storage.type);
-    const isSelected = selectedStorageId === storage.id;
-    const isNearlyFull = progressPercentage > 90;
+  const syncStatusLabel =
+    syncState.syncStatus === 'synced' ? 'Synced' :
+    syncState.syncStatus === 'syncing' ? 'Syncing...' :
+    syncState.syncStatus === 'error' ? 'Error' :
+    'Idle';
 
-    return (
-      <TouchableOpacity
-        key={storage.id}
-        style={[
-          styles.storageCard,
-          isSelected && styles.storageCardSelected,
-          isNearlyFull && styles.storageCardWarning,
-          { borderLeftColor: storageColor }
-        ]}
-        onPress={() => onStoragePress(storage.id)}
-        activeOpacity={0.6}
-        disabled={storage.status === 'unavailable'}
-      >
-        <View style={styles.storageHeader}>
-          <View style={[styles.storageIconContainer, { backgroundColor: storageColor }]}>
-            <Text style={styles.storageIcon}>{storage.icon}</Text>
-          </View>
-          <View style={styles.storageInfo}>
-            <Text style={styles.storageName}>{storage.name}</Text>
-            <View style={styles.statusContainer}>
-              <Text style={[styles.storageStatus, { 
-                color: storage.status === 'available' ? '#27ae60' : 
-                      storage.status === 'full' ? '#e74c3c' : '#95a5a6' 
-              }]}>
-                {storage.status.charAt(0).toUpperCase() + storage.status.slice(1)}
-              </Text>
-              {storage.lastAccessed && (
-                <Text style={styles.lastAccessed}>• {storage.lastAccessed}</Text>
-              )}
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.storageDetails}>
-          <View style={styles.storageSpaceInfo}>
-            <Text style={styles.usedSpace}>
-              Used: {formatStorage(storage.usedSpace)}
-            </Text>
-            <Text style={styles.freeSpace}>
-              Free: {formatStorage(freeSpace)}
-            </Text>
-          </View>
-          
-          <View style={styles.progressBarContainer}>
-            <View style={styles.progressBarBackground}>
-              <View 
-                style={[
-                  styles.progressBarFill, 
-                  { 
-                    width: `${progressPercentage}%`,
-                    backgroundColor: isNearlyFull ? '#e74c3c' : storageColor
-                  }
-                ]} 
-              />
-            </View>
-            <Text style={[styles.progressText, isNearlyFull && styles.warningText]}>
-              {progressPercentage.toFixed(0)}%
-            </Text>
-          </View>
-
-          <View style={styles.storageFooter}>
-            <Text style={styles.totalSpace}>
-              Total: {formatStorage(storage.totalSpace)}
-            </Text>
-            {storage.permissions && (
-              <Text style={styles.permissions}>
-                {storage.permissions.toUpperCase()}
-              </Text>
-            )}
-          </View>
-          
-          {isNearlyFull && (
-            <View style={styles.warningBanner}>
-              <Text style={styles.warningText}>⚠️ Storage Nearly Full</Text>
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const successCount = syncLog.filter(e => e.success).length;
+  const failCount = syncLog.filter(e => !e.success).length;
 
   return (
     <View style={styles.rootContainer}>
-        {/* Header Section */}
-        <View style={styles.headerWrapper}>
-          <View style={styles.header}>
-            <Text style={styles.title}>{title}</Text>
-            <Text style={styles.subtitle}>{subtitle}</Text>
-          </View>
-
-          {/* Tab Bar */}
-          <View style={styles.tabBar}>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'storage' && styles.activeTab]}
-              onPress={() => onTabChange('storage')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.tabText, activeTab === 'storage' && styles.activeTabText]}>
-                Storage
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'database' && styles.activeTab]}
-              onPress={() => onTabChange('database')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.tabText, activeTab === 'database' && styles.activeTabText]}>
-                Database
-              </Text>
-            </TouchableOpacity>
-          </View>
+      {/* Header Section */}
+      <View style={styles.headerWrapper}>
+        <View style={styles.header}>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.subtitle}>{subtitle}</Text>
         </View>
 
-        {activeTab === 'storage' ? (
-          <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-            {/* Storage Overview Card */}
-            <View style={styles.overviewCard}>
-              <View style={styles.overviewHeader}>
-                <Text style={styles.overviewTitle}>Storage Overview</Text>
-                <TouchableOpacity
-                  style={styles.refreshButton}
-                  onPress={onRefresh}
-                  activeOpacity={0.7}
-                  disabled={isRefreshing}
-                >
-                  <Text style={[styles.refreshIcon, isRefreshing && styles.refreshing]}>
-                    {isRefreshing ? '\u23F3' : '\uD83D\uDD04'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.overviewText}>
-                Manage your device storage across different locations
+        {/* Tab Bar */}
+        <View style={styles.tabBar}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'sdcard' && styles.activeTab]}
+            onPress={() => onTabChange('sdcard')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === 'sdcard' && styles.activeTabText]}>
+              SD Card
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'sync' && styles.activeTab]}
+            onPress={() => onTabChange('sync')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === 'sync' && styles.activeTabText]}>
+              Sync
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'database' && styles.activeTab]}
+            onPress={() => onTabChange('database')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === 'database' && styles.activeTabText]}>
+              Database
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {activeTab === 'sdcard' ? (
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          {/* SD Card Status Card */}
+          <View style={[
+            styles.statusCard,
+            {borderLeftColor: sdCardAvailable ? '#27ae60' : '#e74c3c'},
+          ]}>
+            <View style={styles.statusCardHeader}>
+              <Text style={styles.statusCardTitle}>SD Card</Text>
+              <TouchableOpacity
+                style={styles.refreshButton}
+                onPress={onRefresh}
+                activeOpacity={0.7}
+                disabled={isRefreshing}
+              >
+                <Text style={[styles.refreshIcon, isRefreshing && styles.refreshing]}>
+                  {isRefreshing ? '\u23F3' : '\uD83D\uDD04'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.statusRow}>
+              <View style={[
+                styles.statusDot,
+                {backgroundColor: sdCardAvailable ? '#27ae60' : '#e74c3c'},
+              ]} />
+              <Text style={[
+                styles.statusText,
+                {color: sdCardAvailable ? '#27ae60' : '#e74c3c'},
+              ]}>
+                {sdCardAvailable ? 'Available' : 'Unavailable'}
               </Text>
             </View>
 
-            {/* Storage Components Section */}
-            <View style={styles.storageSection}>
-              <Text style={styles.sectionTitle}>Storage Locations</Text>
-              <View style={styles.storageGrid}>
-                {storageData.map(renderStorageCard)}
+            {sdCardPath ? (
+              <Text style={styles.pathText} numberOfLines={2}>{sdCardPath}</Text>
+            ) : null}
+          </View>
+
+          {/* Backup Files Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Backup Files on SD Card
+              {sdCardBackups.length > 0 ? ` (${sdCardBackups.length})` : ''}
+            </Text>
+            {!sdCardAvailable ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>SD card not available</Text>
+                <Text style={styles.emptySubtext}>
+                  Insert an SD card to view backups stored on it
+                </Text>
+              </View>
+            ) : sdCardBackups.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>No backups on SD card</Text>
+                <Text style={styles.emptySubtext}>
+                  Use the Database tab to export a backup to the SD card
+                </Text>
+              </View>
+            ) : (
+              sdCardBackups.map(backup => (
+                <View key={backup.path} style={styles.backupCard}>
+                  <View style={styles.backupHeader}>
+                    <Text style={styles.backupFilename} numberOfLines={1}>
+                      {backup.filename}
+                    </Text>
+                    <Text style={styles.backupSize}>{formatBytes(backup.size)}</Text>
+                  </View>
+                  <Text style={styles.backupMeta}>
+                    {formatDate(backup.createdAt)}
+                    {backup.metadata ? `  •  ${backup.metadata.itemCount} items` : ''}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>&copy; 2026 eTeuraslauta Storage Manager</Text>
+          </View>
+        </ScrollView>
+      ) : activeTab === 'sync' ? (
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          {/* Sync Status Card */}
+          <View style={styles.syncCard}>
+            <View style={styles.syncCardHeader}>
+              <Text style={styles.syncCardTitle}>API Sync Status</Text>
+              <TouchableOpacity
+                style={styles.refreshButton}
+                onPress={onRefresh}
+                activeOpacity={0.7}
+                disabled={isRefreshing}
+              >
+                <Text style={[styles.refreshIcon, isRefreshing && styles.refreshing]}>
+                  {isRefreshing ? '\u23F3' : '\uD83D\uDD04'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.syncStatusRow}>
+              <View style={[styles.syncDot, {backgroundColor: syncStatusColor}]} />
+              <View style={styles.syncStatusInfo}>
+                <Text style={[styles.syncStatusLabel, {color: syncStatusColor}]}>
+                  {syncStatusLabel}
+                </Text>
+                <Text style={styles.syncApiState}>
+                  API: {syncState.apiEnabled ? 'Enabled' : 'Disabled'}
+                </Text>
+              </View>
+              <View style={styles.syncStatsBox}>
+                <Text style={styles.syncStatValue}>
+                  {syncState.lastSyncedAt ? formatDate(syncState.lastSyncedAt) : 'Never'}
+                </Text>
+                <Text style={styles.syncStatLabel}>Last Sync</Text>
               </View>
             </View>
 
-            {/* Quick Actions */}
-            <View style={styles.quickActions}>
-              <Text style={styles.sectionTitle}>Quick Actions</Text>
-              <View style={styles.actionButtonsContainer}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.primaryButton]}
-                  onPress={() => {
-                    const availableStorage = storageData.find(s => s.status === 'available');
-                    if (availableStorage) {
-                      onCleanStorage(availableStorage.id);
-                    }
-                  }}
-                >
-                  <Text style={styles.primaryButtonText}>Clean Storage</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.secondaryButton]}
-                  onPress={() => {
-                    const availableStorage = storageData.find(s => s.status === 'available');
-                    if (availableStorage) {
-                      onBackupStorage(availableStorage.id);
-                    }
-                  }}
-                >
-                  <Text style={styles.secondaryButtonText}>Backup Data</Text>
-                </TouchableOpacity>
+            <View style={styles.syncCounters}>
+              <View style={styles.syncCounter}>
+                <Text style={[styles.counterValue, {color: '#27ae60'}]}>{successCount}</Text>
+                <Text style={styles.counterLabel}>Successful</Text>
+              </View>
+              <View style={styles.counterDivider} />
+              <View style={styles.syncCounter}>
+                <Text style={[styles.counterValue, {color: '#e74c3c'}]}>{failCount}</Text>
+                <Text style={styles.counterLabel}>Failed</Text>
+              </View>
+              <View style={styles.counterDivider} />
+              <View style={styles.syncCounter}>
+                <Text style={[styles.counterValue, {color: '#2c3e50'}]}>{syncLog.length}</Text>
+                <Text style={styles.counterLabel}>Total</Text>
               </View>
             </View>
+          </View>
 
-            {/* Footer */}
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>&copy; 2026 eTeuraslauta Storage Manager</Text>
-            </View>
-          </ScrollView>
-        ) : (
-          databaseContent
-        )}
-      </View>
+          {/* Sync History */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Sync History</Text>
+            {syncLog.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>No sync attempts yet</Text>
+                <Text style={styles.emptySubtext}>
+                  Enable the API in the Database tab and sync will start automatically
+                </Text>
+              </View>
+            ) : (
+              syncLog.map(entry => (
+                <View
+                  key={entry.id}
+                  style={[
+                    styles.logEntry,
+                    {borderLeftColor: entry.success ? '#27ae60' : '#e74c3c'},
+                  ]}
+                >
+                  <View style={styles.logHeader}>
+                    <View style={[
+                      styles.logBadge,
+                      {backgroundColor: entry.success ? '#27ae60' : '#e74c3c'},
+                    ]}>
+                      <Text style={styles.logBadgeText}>
+                        {entry.success ? 'OK' : 'FAIL'}
+                      </Text>
+                    </View>
+                    <Text style={styles.logTime}>{formatDate(entry.timestamp)}</Text>
+                  </View>
+                  <Text style={styles.logDetail}>
+                    {entry.success
+                      ? `Synced ${entry.itemCount} item${entry.itemCount !== 1 ? 's' : ''}`
+                      : entry.errorMessage ?? 'Unknown error'}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
+
+          {/* Recent DB Items */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Latest Database Items</Text>
+            {recentItems.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>No items in database</Text>
+                <Text style={styles.emptySubtext}>
+                  Switch to the Database tab to add items
+                </Text>
+              </View>
+            ) : (
+              recentItems.map(item => (
+                <View key={item.id} style={styles.itemCard}>
+                  <View style={styles.itemHeader}>
+                    <View style={styles.itemIdBadge}>
+                      <Text style={styles.itemIdText}>#{item.id}</Text>
+                    </View>
+                    <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                  </View>
+                  {item.description ? (
+                    <Text style={styles.itemDescription} numberOfLines={2}>
+                      {item.description}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.itemTimestamp}>
+                    Updated: {formatDate(item.updatedAt)}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>&copy; 2026 eTeuraslauta Storage Manager</Text>
+          </View>
+        </ScrollView>
+      ) : (
+        databaseContent
+      )}
+    </View>
   );
 };
 
@@ -295,27 +370,135 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
-  overviewCard: {
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    marginBottom: 16,
+    borderRadius: 12,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  activeTab: {
+    backgroundColor: '#3498db',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#7f8c8d',
+  },
+  activeTabText: {
+    color: '#ffffff',
+  },
+
+  // SD Card Status Card
+  statusCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
-    padding: 24,
-    marginBottom: 30,
+    padding: 20,
+    marginBottom: 24,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
+    shadowOffset: {width: 0, height: 4},
     shadowOpacity: 0.12,
     shadowRadius: 12,
     elevation: 6,
+    borderLeftWidth: 4,
   },
-  overviewHeader: {
+  statusCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  overviewTitle: {
+  statusCardTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#2c3e50',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  statusDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    marginRight: 10,
+  },
+  statusText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  pathText: {
+    fontSize: 12,
+    color: '#7f8c8d',
+    marginTop: 4,
+    fontFamily: 'monospace',
+  },
+
+  // Backup card
+  backupCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#3498db',
+  },
+  backupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  backupFilename: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2c3e50',
+    flex: 1,
+    marginRight: 8,
+  },
+  backupSize: {
+    fontSize: 12,
+    color: '#7f8c8d',
+    fontWeight: '500',
+  },
+  backupMeta: {
+    fontSize: 12,
+    color: '#95a5a6',
+  },
+
+  // Sync Status Card
+  syncCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3498db',
+  },
+  syncCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  syncCardTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#2c3e50',
@@ -331,227 +514,178 @@ const styles = StyleSheet.create({
   refreshIcon: {
     fontSize: 18,
   },
-  overviewText: {
-    fontSize: 14,
-    color: '#7f8c8d',
-    lineHeight: 20,
-  },
-  storageSection: {
-    marginBottom: 30,
-  },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#2c3e50',
-    marginBottom: 20,
-  },
-  storageGrid: {
-    gap: 16,
-  },
-  storageCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-    borderLeftWidth: 4,
-    borderLeftColor: '#3498db',
-    transform: [{ scale: 1 }],
-  },
-  storageCardSelected: {
-    transform: [{ scale: 0.98 }],
-    shadowOpacity: 0.2,
-    elevation: 8,
-    backgroundColor: '#f8f9fa',
-  },
-  storageCardWarning: {
-    borderLeftColor: '#e74c3c',
-    backgroundColor: '#fdf2f2',
-  },
-  storageHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  storageIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  storageIcon: {
-    fontSize: 24,
-    color: '#ffffff',
-  },
-  storageInfo: {
-    flex: 1,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  storageName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#2c3e50',
-    marginBottom: 4,
-  },
-  storageStatus: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginRight: 8,
-  },
-  lastAccessed: {
-    fontSize: 12,
-    color: '#95a5a6',
-    fontStyle: 'italic',
-  },
-  storageDetails: {
-    gap: 12,
-  },
-  storageSpaceInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  usedSpace: {
-    fontSize: 14,
-    color: '#e74c3c',
-    fontWeight: '500',
-  },
-  freeSpace: {
-    fontSize: 14,
-    color: '#27ae60',
-    fontWeight: '500',
-  },
-  progressBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  progressBarBackground: {
-    flex: 1,
-    height: 8,
-    backgroundColor: '#ecf0f1',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  progressText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#5d6d7e',
-    minWidth: 35,
-  },
-  storageFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  totalSpace: {
-    fontSize: 14,
-    color: '#5d6d7e',
-    fontWeight: '500',
-  },
-  permissions: {
-    fontSize: 11,
-    color: '#95a5a6',
-    backgroundColor: '#ecf0f1',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  warningBanner: {
-    marginTop: 8,
-    padding: 8,
-    backgroundColor: '#fef2f2',
-    borderRadius: 6,
-    borderLeftWidth: 3,
-    borderLeftColor: '#e74c3c',
-  },
-  warningText: {
-    color: '#e74c3c',
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
   refreshing: {
     opacity: 0.6,
   },
-  tabBar: {
+  syncStatusRow: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    marginBottom: 16,
-    borderRadius: 12,
-    padding: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
     alignItems: 'center',
-    borderRadius: 10,
+    marginBottom: 16,
   },
-  activeTab: {
-    backgroundColor: '#3498db',
+  syncDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    marginRight: 10,
   },
-  tabText: {
+  syncStatusInfo: {
+    flex: 1,
+  },
+  syncStatusLabel: {
     fontSize: 16,
+    fontWeight: '700',
+  },
+  syncApiState: {
+    fontSize: 12,
+    color: '#7f8c8d',
+    marginTop: 2,
+  },
+  syncStatsBox: {
+    alignItems: 'flex-end',
+  },
+  syncStatValue: {
+    fontSize: 13,
     fontWeight: '600',
+    color: '#2c3e50',
+  },
+  syncStatLabel: {
+    fontSize: 11,
+    color: '#95a5a6',
+    marginTop: 2,
+  },
+  syncCounters: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#ecf0f1',
+    paddingTop: 16,
+  },
+  syncCounter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  counterValue: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  counterLabel: {
+    fontSize: 11,
+    color: '#7f8c8d',
+    marginTop: 4,
+  },
+  counterDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: '#ecf0f1',
+  },
+
+  // Section
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2c3e50',
+    marginBottom: 12,
+  },
+
+  // Empty state
+  emptyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 15,
+    color: '#95a5a6',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  emptySubtext: {
+    fontSize: 13,
+    color: '#bdc3c7',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+
+  // Sync log entries
+  logEntry: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+  },
+  logHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  logBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginRight: 10,
+  },
+  logBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  logTime: {
+    fontSize: 12,
     color: '#7f8c8d',
   },
-  activeTabText: {
-    color: '#ffffff',
+  logDetail: {
+    fontSize: 13,
+    color: '#5d6d7e',
   },
-  quickActions: {
-    marginBottom: 30,
+
+  // Recent items
+  itemCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#9b59b6',
   },
-  actionButtonsContainer: {
+  itemHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  actionButton: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
     alignItems: 'center',
+    marginBottom: 6,
   },
-  primaryButton: {
-    backgroundColor: '#3498db',
+  itemIdBadge: {
+    backgroundColor: '#9b59b6',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginRight: 8,
   },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: '#3498db',
-  },
-  primaryButtonText: {
+  itemIdText: {
     color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '700',
   },
-  secondaryButtonText: {
-    color: '#3498db',
-    fontSize: 16,
+  itemName: {
+    fontSize: 15,
     fontWeight: '600',
+    color: '#2c3e50',
+    flex: 1,
   },
+  itemDescription: {
+    fontSize: 13,
+    color: '#5d6d7e',
+    lineHeight: 18,
+    marginBottom: 6,
+  },
+  itemTimestamp: {
+    fontSize: 11,
+    color: '#95a5a6',
+  },
+
+  // Footer
   footer: {
     paddingVertical: 20,
     alignItems: 'center',
