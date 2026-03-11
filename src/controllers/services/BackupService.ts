@@ -5,11 +5,13 @@ import {
   IBackupMetadata,
   BackupDestination,
 } from '../../interfaces/IDatabaseInterfaces';
+import {getRemovableStorageInfo} from '../../infrastructure/removableStorage';
 
 const BACKUP_DIR_NAME = 'backups';
 
 export class BackupService {
   private static instance: BackupService;
+  private cachedSDCardDirectory = '';
 
   public static getInstance(): BackupService {
     if (!BackupService.instance) {
@@ -19,17 +21,27 @@ export class BackupService {
   }
 
   public getBackupDirectory(): string {
-    return `${RNFS.ExternalDirectoryPath}/${BACKUP_DIR_NAME}`;
+    return this.cachedSDCardDirectory;
   }
 
   public getInternalBackupDirectory(): string {
     return `${RNFS.DocumentDirectoryPath}/${BACKUP_DIR_NAME}`;
   }
 
-  private dirForDestination(dest: BackupDestination): string {
-    return dest === 'sd'
-      ? this.getBackupDirectory()
-      : this.getInternalBackupDirectory();
+  private async resolveSDCardDirectory(): Promise<string> {
+    const info = await getRemovableStorageInfo();
+    this.cachedSDCardDirectory = info.path
+      ? `${info.path}/${BACKUP_DIR_NAME}`
+      : '';
+    return this.cachedSDCardDirectory;
+  }
+
+  private async dirForDestination(dest: BackupDestination): Promise<string> {
+    if (dest === 'sd') {
+      return await this.resolveSDCardDirectory();
+    }
+
+    return this.getInternalBackupDirectory();
   }
 
   private async ensureDirExists(dir: string): Promise<void> {
@@ -40,13 +52,19 @@ export class BackupService {
   }
 
   public async ensureBackupDirectoryExists(): Promise<void> {
-    await this.ensureDirExists(this.getBackupDirectory());
+    const dir = await this.resolveSDCardDirectory();
+    if (!dir) {
+      throw new Error('SD card not available');
+    }
+
+    await this.ensureDirExists(dir);
   }
 
   public async isSDCardAvailable(): Promise<boolean> {
     try {
-      return await RNFS.exists(RNFS.ExternalDirectoryPath);
+      return Boolean(await this.resolveSDCardDirectory());
     } catch {
+      this.cachedSDCardDirectory = '';
       return false;
     }
   }
@@ -60,7 +78,11 @@ export class BackupService {
     const paths: string[] = [];
 
     for (const dest of destinations) {
-      const dir = this.dirForDestination(dest);
+      const dir = await this.dirForDestination(dest);
+      if (!dir) {
+        throw new Error('SD card not available');
+      }
+
       await this.ensureDirExists(dir);
       const filePath = `${dir}/${filename}`;
       await RNFS.writeFile(filePath, jsonContent, 'utf8');
@@ -77,8 +99,9 @@ export class BackupService {
   }
 
   public async listBackups(): Promise<IBackupFile[]> {
+    const sdCardDirectory = await this.resolveSDCardDirectory();
     const sources: Array<{dir: string; location: BackupDestination}> = [
-      {dir: this.getBackupDirectory(), location: 'sd'},
+      {dir: sdCardDirectory, location: 'sd'},
       {dir: this.getInternalBackupDirectory(), location: 'internal'},
     ];
 
@@ -144,8 +167,13 @@ export class BackupService {
 
   // Kept for backward compatibility
   public async readBackup(filename: string): Promise<IBackupData> {
+    const dir = await this.resolveSDCardDirectory();
+    if (!dir) {
+      throw new Error('SD card not available');
+    }
+
     return this.readBackupFromPath(
-      `${this.getBackupDirectory()}/${filename}`,
+      `${dir}/${filename}`,
     );
   }
 
@@ -160,8 +188,13 @@ export class BackupService {
 
   // Kept for backward compatibility
   public async deleteBackup(filename: string): Promise<boolean> {
+    const dir = await this.resolveSDCardDirectory();
+    if (!dir) {
+      return false;
+    }
+
     return this.deleteBackupFromPath(
-      `${this.getBackupDirectory()}/${filename}`,
+      `${dir}/${filename}`,
     );
   }
 

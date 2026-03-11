@@ -544,19 +544,19 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({
           style={[
             styles.backupButton,
             styles.exportButton,
-            (sdCardAvailable !== true) && styles.disabledButton,
+            isBackingUp && styles.disabledButton,
           ]}
           onPress={onExportBackup}
-          disabled={isBackingUp || sdCardAvailable !== true}>
+          disabled={isBackingUp}>
           <Text style={styles.exportButtonText}>
-            {isBackingUp ? 'Exporting...' : 'Export to SD'}
+            {isBackingUp ? 'Exporting...' : 'Create Backup'}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.backupButton, styles.viewBackupsButton]}
           onPress={showBackups ? onHideBackups : onShowBackups}>
           <Text style={styles.viewBackupsButtonText}>
-            {showBackups ? 'Hide Backups' : 'View Backups'}
+            {showBackups ? 'Hide Backups' : 'View Device Backups'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -566,7 +566,7 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({
           <Text style={styles.sdWarningText}>
             {sdCardAvailable === null
               ? 'Checking SD card availability...'
-              : 'SD card is not available. Backup export is disabled.'}
+              : 'SD card is not available. Backups can still be saved to internal storage.'}
           </Text>
         </View>
       )}
@@ -583,10 +583,10 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({
           {backups.length === 0 ? (
             <View style={styles.noBackupsBox}>
               <Text style={styles.noBackupsText}>
-                No backups found on SD card
+                No backups found on this device
               </Text>
               <Text style={styles.noBackupsSubText}>
-                {sdCardPath || 'SD card path unavailable'}
+                {sdCardAvailable ? sdCardPath : 'Create a backup to internal storage or SD card'}
               </Text>
             </View>
           ) : (
