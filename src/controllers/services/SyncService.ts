@@ -82,16 +82,8 @@ export class SyncService {
 
     await this.databaseService.setSyncState(true, this.lastSyncedAt);
     this.notifyChange();
+ 
 
-    // Restart polling
-    if (this.onStatusChange) {
-      this.stopPolling();
-      this.pollTimer = setInterval(() => {
-        this.syncNow();
-      }, POLL_INTERVAL_MS);
-    }
-
-    // Immediate sync on enable
     await this.syncNow();
   }
 

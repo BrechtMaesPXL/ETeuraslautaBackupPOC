@@ -114,11 +114,23 @@ export class BackupService {
       }
 
       const files = await RNFS.readDir(dir);
-      for (const file of files) {
-        if (!file.name.endsWith('.json')) {
-          continue;
+      
+      const filePaths: {path: string; name: string; size: number; mtime: Date | undefined}[] = [];
+      
+      for (const f of files) {
+        if (f.isDirectory()) {
+          const subFiles = await RNFS.readDir(f.path);
+          for (const sub of subFiles) {
+            if (!sub.isDirectory() && sub.name.endsWith('.json')) {
+              filePaths.push({path: sub.path, name: `${f.name}/${sub.name}`, size: sub.size, mtime: sub.mtime});
+            }
+          }
+        } else if (f.name.endsWith('.json')) {
+          filePaths.push({path: f.path, name: f.name, size: f.size, mtime: f.mtime});
         }
+      }
 
+      for (const file of filePaths) {
         let metadata: IBackupMetadata | null = null;
         try {
           const content = await RNFS.readFile(file.path, 'utf8');

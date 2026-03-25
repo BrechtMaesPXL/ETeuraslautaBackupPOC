@@ -16,7 +16,7 @@ import {
 export interface HomeViewProps {
   title: string;
   subtitle: string;
-  activeTab: 'sdcard' | 'sync' | 'database';
+  activeTab: 'sdcard' | 'sync' | 'database' | 'p2p';
   sdCardAvailable: boolean;
   sdCardPath: string;
   sdCardBackups: IBackupFile[];
@@ -25,8 +25,9 @@ export interface HomeViewProps {
   recentItems: IDatabaseItem[];
   isRefreshing: boolean;
   onRefresh: () => void;
-  onTabChange: (tab: 'sdcard' | 'sync' | 'database') => void;
+  onTabChange: (tab: 'sdcard' | 'sync' | 'database' | 'p2p') => void;
   databaseContent: React.ReactNode;
+  p2pContent: React.ReactNode;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -43,6 +44,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onRefresh,
   onTabChange,
   databaseContent,
+  p2pContent,
 }) => {
   const formatDate = (dateStr: string) => {
     try {
@@ -115,6 +117,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
           >
             <Text style={[styles.tabText, activeTab === 'database' && styles.activeTabText]}>
               Database
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'p2p' && styles.activeTab]}
+            onPress={() => onTabChange('p2p')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === 'p2p' && styles.activeTabText]}>
+              P2P
             </Text>
           </TouchableOpacity>
         </View>
@@ -331,6 +342,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <Text style={styles.footerText}>&copy; 2026 eTeuraslauta Storage Manager</Text>
           </View>
         </ScrollView>
+      ) : activeTab === 'p2p' ? (
+        p2pContent
       ) : (
         databaseContent
       )}

@@ -62,7 +62,7 @@ export class SDStorageController {
           id: '4',
           name: 'backup_data.zip',
           type: 'file',
-          size: 1024 * 1024 * 150, // 150 MB
+          size: 1024 * 1024 * 150, 
           modified: '1 week ago',
           icon: '📦',
         },
@@ -77,7 +77,7 @@ export class SDStorageController {
           id: '6',
           name: 'music_collection.mp3',
           type: 'file',
-          size: 1024 * 1024 * 85, // 85 MB
+          size: 1024 * 1024 * 85, 
           modified: '3 weeks ago',
           icon: '🎵',
         },
@@ -88,7 +88,6 @@ export class SDStorageController {
   public handleBack(): void {
     const canGoBack = this.navigationController.goBack();
     if (!canGoBack) {
-      // Fallback to home if can't go back
       this.navigationController.navigateToHome();
     }
   }
@@ -105,7 +104,6 @@ export class SDStorageController {
           { 
             text: 'Open', 
             onPress: () => {
-              // TODO: Implement folder navigation
               console.log(`Opening folder: ${file.name}`);
               Alert.alert('Folder Opened', `Browsing ${file.name} folder contents...`);
             }
@@ -145,7 +143,6 @@ export class SDStorageController {
           text: 'Delete', 
           style: 'destructive',
           onPress: () => {
-            // TODO: Implement actual file deletion
             console.log(`Deleting file: ${file.name}`);
             Alert.alert('File Deleted', `${file.name} has been deleted.`);
           }
@@ -156,7 +153,6 @@ export class SDStorageController {
 
   public handleRefresh(): void {
     console.log('Refreshing SD storage data...');
-    // TODO: Implement actual refresh logic
   }
 
   public handleManageStorage(): void {
@@ -192,7 +188,6 @@ export class SDStorageController {
           text: 'Format', 
           style: 'destructive',
           onPress: () => {
-            // TODO: Implement actual format logic
             console.log('Formatting SD card...');
             Alert.alert('Formatting Started', 'SD card is being formatted...');
           }

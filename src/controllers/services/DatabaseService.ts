@@ -1,10 +1,9 @@
 import {open} from '@op-engineering/op-sqlite';
 import type {Transaction} from '@op-engineering/op-sqlite';
+import {getEncryptedDB} from '../../infrastructure/encryptedDatabase';
 import {IDatabaseItem, IDatabaseItemInput, ISyncLogEntry} from '../../interfaces/IDatabaseInterfaces';
 
 type OPSQLiteDB = ReturnType<typeof open>;
-
-const DATABASE_NAME = 'eTeuraslauta.db';
 
 export class DatabaseService {
   private static instance: DatabaseService;
@@ -23,7 +22,7 @@ export class DatabaseService {
       return;
     }
 
-    this.db = open({name: DATABASE_NAME});
+    this.db = await getEncryptedDB();
     await this.createTables();
     this.isInitialized = true;
   }
@@ -199,6 +198,25 @@ export class DatabaseService {
         await tx.execute(
           'INSERT INTO items (name, description, created_at, updated_at) VALUES (?, ?, ?, ?);',
           [item.name, item.description, item.createdAt, item.updatedAt],
+        );
+      }
+    });
+  }
+
+  public async upsertItemsWithTimestamps(items: IDatabaseItem[]): Promise<void> {
+    const db = await this.ensureInitialized();
+
+    await db.transaction(async (tx: Transaction) => {
+      for (const item of items) {
+        await tx.execute(
+          'INSERT OR REPLACE INTO items (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?);',
+          [
+            item.id,
+            item.name,
+            item.description,
+            item.createdAt,
+            item.updatedAt,
+          ],
         );
       }
     });
